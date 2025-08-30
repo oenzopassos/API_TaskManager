@@ -67,30 +67,23 @@ class TasksController {
             throw new AppError("No user provided for assignment");
         }
 
-        const task = await prisma.task.findUnique({
+        const task = await prisma.task.findFirst({
             where: {
-                id: taskId
-            },
-            include: {
+                id: taskId,
                 team: {
-                    select: {
-                        members: true
+                    members: {
+                        some: {
+                            userId: assignedUserId
+                        }
                     }
                 }
             }
         })
 
         if (!task) {
-            throw new AppError("Task not found", 404);
+            throw new AppError("Task not found  or user not in team", 404);
         }
 
-        const isUserInTeam = task.team.members.some(
-            (member) => member.userId === assignedUserId
-        )
-
-        if (!isUserInTeam) {
-            throw new AppError("This user does not belong to this team", 404);
-        }
 
         if (task.status !== 'pending') {
             throw new AppError("This task must be pending");
@@ -98,6 +91,10 @@ class TasksController {
 
         if (assignedUserId === request.user?.id) {
             throw new AppError("This task already belongs to you");
+        }
+
+        if (assignedUserId === task.userId) {
+            throw new AppError("This task already belongs to this user")
         }
 
         await prisma.task.update({
@@ -115,6 +112,60 @@ class TasksController {
         })
     }
 
+    async update(request: Request, response: Response) {
+        const paramsSchema = z.object({
+            taskId: z.uuid()
+        })
+
+        const bodySchema = z.object({
+            title: z.string().min(2).optional(),
+            description: z.string().optional(),
+            priority: z.enum(['high', 'medium', 'low']).optional()
+        })
+
+        const { taskId } = paramsSchema.parse(request.params)
+        const { title, description, priority } = bodySchema.parse(request.body)
+        const userId = request.user?.id;
+
+        const task = await prisma.task.findFirst({
+            where: {
+                id: taskId,
+                userId,
+                team: {
+                    members: {
+                        some :{
+                            userId,
+                        }
+                    }
+                }
+            },
+
+           
+        })
+
+
+        if (!task) {
+            throw new AppError("This task does not belong to you or user not in team")
+        }
+
+
+        const taskUpdated = await prisma.task.update({
+            where: {
+                id: taskId
+            },
+            data: {
+                title,
+                description,
+                priority
+            }
+        })
+
+        return response.json({
+            message: "Task updated successfully",
+            taskUpdated
+        })
+    }
+
     async show(request: Request, response: Response) {
 
         const userId = request.user?.id
@@ -129,19 +180,19 @@ class TasksController {
                 }
             },
             include: {
+                assignedTo: false,
                 team: {
                     select: {
                         name: true,
-                        description: true
+                        description: true,
                     }
                 }
             }
         })
 
-        const showTasksWithoutUserId = showTasks.map(({userId, ...rest}) => rest)
 
         return response.json({
-            showTasksWithoutUserId
+            showTasks
         })
     }
 }

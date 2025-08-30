@@ -13,6 +13,6 @@ tasksRoutes.post("/:id", verifyAuthorization(['admin']), tasksController.create)
 tasksRoutes.get("/", verifyAuthorization(["member", 'admin']), tasksController.show);
 tasksRoutes.patch("/:task_id/status", verifyAuthorization(["admin"]), tasksStatusController.update);
 tasksRoutes.patch("/:taskId/assign", verifyAuthorization(['admin']), tasksController.updateAssign);
-
+tasksRoutes.put("/:taskId", verifyAuthorization(['member','admin']), tasksController.update);
 
 export {tasksRoutes};
