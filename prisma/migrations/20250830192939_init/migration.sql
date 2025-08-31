@@ -63,7 +63,7 @@ CREATE TABLE "public"."TaskHistory" (
     "user_id" TEXT NOT NULL,
     "old_status" "public"."StatusTask",
     "new_status" "public"."StatusTask" NOT NULL,
-    "changed_at" TIMESTAMP(3) NOT NULL,
+    "changed_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "TaskHistory_pkey" PRIMARY KEY ("id")
 );

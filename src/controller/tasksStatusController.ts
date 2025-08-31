@@ -8,42 +8,60 @@ import z from "zod";
 class TasksStatusController {
     async update(request: Request, response: Response) {
         const paramsSchema = z.object({
-            task_id: z.uuid()
+            taskId: z.uuid()
         })
         const bodySchema = z.object({
             status: z.enum(["pending", "in_progress", "completed"])
         })
 
-        const { task_id } = paramsSchema.parse(request.params);
+        const { taskId } = paramsSchema.parse(request.params);
         const { status } = bodySchema.parse(request.body);
 
-        const task = await prisma.task.findUnique({
+        const task = await prisma.task.findFirst({
             where: {
-                id: task_id
+                id: taskId,
+                OR: [
+
+                    {
+                        team: {
+                            members: {
+                                some: {
+                                    userId: request.user?.id,
+                                    user: { role: 'admin' }
+                                }
+                            }
+                        }
+                    },
+    
+                    {
+                        assignedToId: request.user?.id
+                    }
+                ]
+
             }
         })
 
-        if(!task) {
-            throw new AppError("Task not found", 404)
+        if (!task) {
+            throw new AppError("Task not found or user not in team", 404)
         }
 
-        if(task.status === 'completed') {
+        if (task.status === 'completed') {
             throw new AppError("This Task has already been completed");
         }
 
-        if(task.status === 'pending' && status === 'completed') {
-            throw new AppError("Change status to 'in Progess' before updating to 'completed'");
+        if (task.status === 'pending' && status === 'completed') {
+            throw new AppError("Change status to 'in Progress' before updating to 'completed'");
         }
 
-        if(task.status === 'in_progress' && status === 'pending') {
+        if (task.status === 'in_progress' && status === 'pending') {
             throw new AppError("Once the status has been changed to 'In Progress', it cannot be reverted back to 'Pending'");
         }
 
-        if(task.status === 'in_progress' && status === 'in_progress') {
+        if (task.status === 'in_progress' && status === 'in_progress') {
             throw new AppError("The task is already 'in progress'. The only remaining status option is 'completed'.");
         }
 
-        if(status === 'pending') {
+        if (status === 'pending') {
             throw new AppError("Change status to 'in Progress'");
         }
 
@@ -55,20 +73,20 @@ class TasksStatusController {
                     create: {
                         oldStatus: task.status,
                         newStatus: status,
-                        changedBy: {connect: {id: request.user!.id}}
+                        changedBy: { connect: { id: request.user!.id } }
                     }
-                        
-                    
+
+
                 }
             },
             where: {
-                id: task_id
+                id: taskId
             },
         })
 
 
         return response.json({
-            message: `Staus updated to "${status}"`
+            message: "Status updated successfully"
         })
     }
 }

@@ -54,14 +54,14 @@ class TasksController {
         })
 
         const bodySchema = z.object({
-            assignedTo: z.uuid().optional(),
+            assignedToId: z.uuid().optional(),
         })
 
 
         const { taskId } = paramsSchema.parse(request.params);
-        const { assignedTo } = bodySchema.parse(request.body)
+        const { assignedToId } = bodySchema.parse(request.body)
 
-        const assignedUserId = assignedTo ?? request.user?.id;
+        const assignedUserId = assignedToId ?? request.user?.id;
 
         if (!assignedUserId) {
             throw new AppError("No user provided for assignment");
@@ -89,12 +89,8 @@ class TasksController {
             throw new AppError("This task must be pending");
         }
 
-        if (assignedUserId === request.user?.id) {
-            throw new AppError("This task already belongs to you");
-        }
-
-        if (assignedUserId === task.userId) {
-            throw new AppError("This task already belongs to this user")
+        if (assignedUserId === task.assignedToId) {
+            throw new AppError("This task is already assigned to this user")
         }
 
         await prisma.task.update({
@@ -130,17 +126,10 @@ class TasksController {
         const task = await prisma.task.findFirst({
             where: {
                 id: taskId,
-                userId,
-                team: {
-                    members: {
-                        some :{
-                            userId,
-                        }
-                    }
-                }
+                assignedToId: userId
             },
 
-           
+
         })
 
 
@@ -148,6 +137,9 @@ class TasksController {
             throw new AppError("This task does not belong to you or user not in team")
         }
 
+        if (task.status === 'completed') {
+            throw new AppError("This task can only be updated if its status is not set to 'completed'")
+        }
 
         const taskUpdated = await prisma.task.update({
             where: {
@@ -166,33 +158,68 @@ class TasksController {
         })
     }
 
-    async show(request: Request, response: Response) {
+    async showTeamTasks(request: Request, response: Response) {
+        const paramsSchema = z.object({
+            teamId: z.uuid()
+        })
 
-        const userId = request.user?.id
+        const { teamId } = paramsSchema.parse(request.params)
+        const userId = request.user?.id;
 
-        if (!userId) {
-            throw new AppError("User not authenticated", 401);
-        }
-        const showTasks = await prisma.task.findMany({
+
+        const isMember = await prisma.teamMember.findFirst({
             where: {
-                assignedTo: {
-                    id: userId,
-                }
+                teamId,
+                userId
+            }
+        });
+
+        if (!isMember) {
+            throw new AppError("You are not a member of this team", 403);
+        }
+
+
+        const tasks = await prisma.task.findMany({
+            where: { teamId },
+            include: {
+                assignedTo: { select: { id: true, name: true } },
+                team: { select: { name: true, description: true } }
+            }
+        });
+
+        return response.json({ tasks });
+    }
+
+
+    async showMyTasks(request: Request, response: Response) {
+        const userId = request.user?.id;
+
+        if(!userId) {
+            throw new AppError("User not authenticated")
+        }
+
+        const tasks = await prisma.task.findMany({
+            where: {
+                assignedToId: userId, 
+                
             },
             include: {
-                assignedTo: false,
+                assignedTo: {
+                    select: {
+                        name: true
+                    }
+                },
                 team: {
                     select: {
                         name: true,
-                        description: true,
+                        description: true
                     }
                 }
             }
         })
 
-
         return response.json({
-            showTasks
+            tasks
         })
     }
 }

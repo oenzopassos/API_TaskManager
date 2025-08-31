@@ -164,7 +164,7 @@ class TeamsController {
         const tasks = await prisma.task.findMany({
             where: {
                 teamId,
-                userId: userAlreadyExistsInTeam.userId,
+                assignedToId: userAlreadyExistsInTeam.userId,
             }
         })
 
@@ -172,10 +172,10 @@ class TeamsController {
             await prisma.task.updateMany({
                 where: {
                     teamId,
-                    userId: userAlreadyExistsInTeam.userId
+                    assignedToId: userAlreadyExistsInTeam.userId
                 },
                 data: {
-                    userId: request.user?.id
+                    assignedToId: request.user?.id
                 }
             })
         }
